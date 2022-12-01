@@ -7,6 +7,8 @@ let sumOne a: int = a |> map (sscanf "%d") |> sum
 elves |> map sumOne |> Seq.sortDescending |> take 3 |> sum
 
 
+//another approach, more imperative
+
 let elves2 = 
     [
         let mutable cals = 0
