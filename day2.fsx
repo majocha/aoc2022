@@ -1,4 +1,4 @@
-#r "nuget: FSharpPlus"
+#r "nuget: FSharpPlus, 1.2.5"
 open FSharpPlus
 
 let input = System.IO.File.ReadAllLines "2.txt" |> map (sscanf "%s %s")
