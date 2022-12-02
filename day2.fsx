@@ -20,15 +20,8 @@ let winningMoveFor = function
 let losingMoveFor = function
     | Rock -> Scissors | Scissors -> Paper | Paper -> Rock
 
-let playScore elfsMove yourMove =
-    let yourSelection =
-        match yourMove with
-        | Rock -> 1 | Paper -> 2 | Scissors -> 3
-    let outcome =
-        if elfsMove = yourMove then 3
-        elif winningMoveFor elfsMove = yourMove then 6
-        else 0
-    outcome + yourSelection
+let yourMoveScore = function Rock -> 1 | Paper -> 2 | Scissors -> 3
+let OutcomeScore = function Win -> 6 | Lose -> 0 | Draw -> 3
 
 let decideYourMove elfsMove outcome = 
     match outcome with
@@ -39,6 +32,6 @@ let decideYourMove elfsMove outcome =
 let doRound (abc, xyz) =
     let elfsMove, outcome = parseMove abc, parseOutcome xyz
     let yourMove = decideYourMove elfsMove outcome
-    playScore elfsMove yourMove
+    yourMoveScore yourMove + OutcomeScore outcome
 
 input |> map doRound |> sum
