@@ -4,15 +4,14 @@ open System
 
 let input = IO.File.ReadAllLines "5.txt"
 let height = Array.IndexOf(input, "")
-let columnIndexes  =
-    input[height-1] |> Seq.indexed |> filter (snd >> Char.IsAsciiDigit) |> toList 
+let ci n  = 4 * ( n - 1 ) + 1
 
 let parseStack x =
     [ for i in 0..height - 2 -> input[i][x] ]
     |> filter Char.IsAsciiLetter
-let stacks = [for i, c in columnIndexes do c, parseStack i] |> Map
+let stacks = [for n in 1..9 -> n, ci n |> parseStack] |> Map
 
-let moves = input[height+1..] |> map (sscanf "move %d from %c to %c") |> toList
+let moves = input[height+1..] |> map (sscanf "move %d from %d to %d") |> toList
 
 let move source dest n =
     source |> skip n, (source |> take n(* |> rev *)) @ dest
