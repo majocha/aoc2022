@@ -55,6 +55,7 @@ let rec replay commands result path =
         replay commands result path
 
 let result = replay parsed [] []
+
 let paths = result |> map fst
 let partOne = 
     [ 
