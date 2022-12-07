@@ -1,5 +1,3 @@
-// no tree solution
-
 #r "nuget: FSharpPlus, 1.2.5"
 open FSharpPlus
 
@@ -11,43 +9,22 @@ let (|Cd|_|)  = trySscanf "$ cd %s" >> Option.map cddir
 let (|Ls|_|) = function "$ ls" -> Some () | _ -> None
 let (|File|_|) = trySscanf "%d %s" >> Option.map fst
 
-let rec sumFiles lines total =
-    match lines with
-    | [] -> total
-    | (File size) :: rest -> sumFiles rest (total + size)
-    | _ :: rest -> sumFiles rest total
+let sumFiles total = function File size -> total + size | _ -> total
 
+let rec sumDirs result path = function
+    | Cd Root :: rest -> sumDirs result ["/"] rest
+    | Cd Up :: rest -> sumDirs result (path |> skip 1) rest
+    | Cd (Down dir) :: rest -> sumDirs result (dir :: path) rest
+    | Ls :: rest ->
+        let lines = rest |> takeWhile (fun s -> not (s.StartsWith "$")) |> toList
+        let total = lines |> fold sumFiles 0
+        let pathStr = path |> rev |> String.intercalate "/"
+        sumDirs ((pathStr, total) :: result) path (rest |> skip lines.Length) 
+    | _ -> result
 
-let rec sumDirs input result path =
-    match input with
-    | [] -> result
-    | line :: rest ->
-        match line with
-        | Cd Root -> sumDirs rest result ["/"]
-        | Cd Up -> sumDirs rest result (path |> skip 1)
-        | Cd (Down dir) -> sumDirs rest result (dir :: path)
-        | Ls ->
-            let lines = rest |> takeWhile (fun s -> not (s.StartsWith "$")) |> toList
-            let total = sumFiles lines 0
-            let pathStr = path |> rev |> String.intercalate "/"
-            sumDirs (rest |> skip lines.Length) ((pathStr, total) :: result) path
-        | _ -> failwith "wrong input" 
-
-let result = sumDirs input [] []
+let result = sumDirs [] [] input
 
 let paths = result |> map fst
-
-let partOne = 
-    [ 
-        for path in paths do
-        let total =
-            result
-            |> filter (fun (p, _) -> p.StartsWith path)
-            |> List.sumBy snd
-        if total <= 100_000 then yield total
-    ] |> sum
-
-// part two
 
 let dirSizes = 
     [ 
@@ -55,7 +32,10 @@ let dirSizes =
             result
             |> filter (fun (p, _) -> p.StartsWith path)
             |> List.sumBy snd
-    ] |> sort |> rev
+    ] 
+
+let partOne = dirSizes |> filter (fun s -> s <= 100000) |> sum
+// part two
 
 let totalAvailable = 70000000
 let spaceRequired = 30000000
