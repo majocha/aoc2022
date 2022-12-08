@@ -26,7 +26,6 @@ let dirs2 x y = [
 ]
 
 let lookFrom h line =
-    let x, y = line |> List.head
     let treesInDirection = line |> List.tail
     let rec countTrees total = function
         | [] -> total
