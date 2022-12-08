@@ -3,12 +3,11 @@ let d = input.Length
 
 let trees = Array2D.init d d (fun x y -> input[y][x] |> string |> int)
 
-let look line = [
-    let mutable tallest = -1
-    for x, y in line do
-        if tallest < trees[x,y] then
-            tallest <- trees[x,y]
-            yield x ,y ]
+let look line =
+    let folder (visible, tallest) = function
+        | x, y when trees[x, y] > tallest -> (x, y) :: visible, trees[x, y]
+        | _ -> (visible, tallest)
+    line |> List.fold folder ([], -1) |> fst
 
 let dirs i =
     let row = [ for x in 0..d-1 -> x, i ]
