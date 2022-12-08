@@ -1,29 +1,32 @@
 let input = System.IO.File.ReadAllLines "8.txt"
-let d =input[0].Length
+let d = input.Length
 
 let trees = Array2D.init d d (fun x y -> input[y][x] |> string |> int)
-let visibilityMap = Array2D.create d d 0
 
-let look line =
+let look line = [
     let mutable tallest = -1
     for x, y in line do
         if tallest < trees[x,y] then
             tallest <- trees[x,y]
-            visibilityMap[x,y] <- 1
+            yield x ,y ]
 
-for i in 0..d-1 do
-    look [for x in 0..d-1 -> x, i]
-    look [for x = d-1 downto 0 do x, i]
-    look [for y in 0..d-1 -> i, y]
-    look [for y = d-1 downto 0 do i, y]
+let dirs i =
+    let row = [ for x in 0..d-1 -> x, i ]
+    let col = [ for y in 0..d-1 -> i, y ]
+    [ row; col; row |> List.rev; col |> List.rev]
 
-[ for x in 0..d-1 do for y in 0..d-1 do visibilityMap[x,y] ] |> List.sum
+let partOne =
+    [0 .. d - 1] |> List.collect (dirs >> List.collect look) |> List.distinct |> List.length
 
-// part two
+let dirs2 x y = [
+    [ for i in x..d-1 -> i, y ]
+    [ for i = x downto 0 do i, y ]
+    [ for i = y downto 0 do x, i ]
+    [ for i in y..d-1 -> x, i ]
+]
 
-let lookFrom line =
+let lookFrom h line =
     let x, y = line |> List.head
-    let h = trees[x,y]
     let treesInDirection = line |> List.tail
     let rec countTrees total = function
         | [] -> total
@@ -31,10 +34,7 @@ let lookFrom line =
         | _ :: rest -> countTrees (total + 1) rest
     countTrees 0 treesInDirection
 
-let lookAllDirs x y =
-    lookFrom [ for i = x downto 0 do i, y ]
-    * lookFrom [ for i in x..d-1 -> i, y ]
-    * lookFrom [ for i = y downto 0 do x, i ]
-    * lookFrom [ for i in y..d-1 -> x, i ]
+let value x y h = dirs2 x y |> List.map (lookFrom h) |> List.reduce (*)
 
-[ for x in 0..d-1 do for y in 0..d-1 do lookAllDirs x y] |> List.max
+let partTwo =
+    trees |> Array2D.mapi value |> Seq.cast<int> |> Seq.max
