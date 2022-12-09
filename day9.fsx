@@ -11,11 +11,8 @@ let moveSteps (move, n) =
 
 let tailStep (hx, hy) (tx, ty) =
     let dx, dy = hx - tx, hy - ty
-    let touch d = if abs d > 1 then sign d else 0
-    if abs dx + abs dy > 2 then 
-        //diagonal step
-        sign dx, sign dy 
-    else touch dx, touch dy
+    let touches = abs dx < 2 && abs dy < 2
+    if not touches then sign dx, sign dy else 0, 0
 
 let headSteps = input |> List.collect moveSteps
 
