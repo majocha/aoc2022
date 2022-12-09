@@ -18,19 +18,15 @@ let headSteps = input |> List.collect moveSteps
 
 let inline (++) (x, y) (dx, dy) = x + dx, y + dy
 
-let stepFolder pos step = pos, pos ++ step
+let stepFolder pos step = pos ++ step
 
-let foldWithLast f ps =
-    let result, last = ps |> List.mapFold f (0, 0)
-    result @ [last]
+let headPositions = headSteps |> List.scan stepFolder (0, 0) 
 
-let headPositions = foldWithLast stepFolder headSteps
-
-let tailStepFolder tail head = tail, tail ++ (tailStep head tail)
+let tailStepFolder tail head = tail ++ (tailStep head tail)
 
 let countDistinct a = a |> List.distinct |> List.length 
 
-let tailPositions headPositions = foldWithLast tailStepFolder headPositions
+let tailPositions headPositions = headPositions |> List.scan tailStepFolder (0, 0)
 
 let partOne = headPositions |> tailPositions |> countDistinct
 
