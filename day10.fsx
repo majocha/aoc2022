@@ -8,17 +8,18 @@ let input =
         | _ -> failwith "error"
     )
 
-let cycles = [|
-    let mutable X = 1
-    for i in input do
-        match i with
-        | Noop -> 
-            yield X
-        | Addx v ->
-            yield X
-            yield X
-            X <- X + v
-|]
+let cycles =
+    [|
+        let mutable X = 1
+        for i in input do
+            match i with
+            | Noop -> 
+                yield X
+            | Addx v ->
+                yield X
+                yield X
+                X <- X + v
+    |]
 
 let partOne =
     [20; 60; 100; 140; 180; 220] |> List.sumBy (fun n -> n * cycles[n - 1])
