@@ -27,6 +27,6 @@ let partOne =
 for y in 0..5 do
     for x in 0..39 do
         let center = cycles[y * 40 + x]
-        if x >= center - 1 && x <= center + 1 then '#' else '.'
+        if x >= center - 1 && x <= center + 1 then '#' else ' '
         |> printf "%c"
     printfn ""
