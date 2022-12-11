@@ -1,8 +1,10 @@
 open System.IO
 open System.Text.RegularExpressions
 
-type Monkey = {Id: int; Items: int list; Throw: int -> int * int}
+type Inspect = int -> int * int
+type Monkey = {Id: int; Items: int list; Inspect: Inspect; Business: int}
 let parseMonkey text =
+    printfn $"{text}"
     let number name = $"(?<{name}>\d+)"
     let toLineEnd name = $"(?<{name}>.*)"
     let operation name = $"(?<{name}>\*|\+|)"
@@ -17,42 +19,45 @@ let parseMonkey text =
         let matched = Regex.Match(text, pattern, RegexOptions.Multiline)
         matched.Groups[key].Value
     let parsedi = parsed >> int
-    //let items = [ for i in (parsed "items").Split ',' -> int i ]
+    let items = [ for i in (parsed "items").Split ',' -> int i ]
     let monkeyId = parsedi "mid"
     let divisibleBy = parsedi "divisibleBy"
     let ifTrue = parsedi "ifTrue"
     let ifFalse = parsedi "ifFalse"
-    let monkeyThrowItem = fun worryLevel ->
+
+    let inspect = fun worryLevel ->
         let p =
            match parsed "p" with "old" -> worryLevel | _ -> parsedi "p"
-        let worryLevel =       
+        let afterWorryLevel =       
             match parsed "op" with 
-            | "*" -> worryLevel * p 
-            | "+" -> worryLevel + p
+            | "*" -> (worryLevel * p) / 3
+            | "+" -> (worryLevel + p) / 3
             | _ -> failwith "error"
-        let throwTo = if worryLevel % divisibleBy = 0 then ifTrue else ifFalse
-        throwTo, worryLevel / 3
-    //{ Id = monkeyId; Items = items; Throw = monkeyThrowItem }
-    parsed "items"
+        let throwTo = if afterWorryLevel % divisibleBy = 0 then ifTrue else ifFalse
+        throwTo, afterWorryLevel
+
+    {Id = monkeyId; Items = items; Inspect = inspect; Business = 0}
 
 
+let monkeys = 
+  File.ReadAllLines "11.txt" |> Seq.chunkBySize 7 |> Seq.map (Seq.take 6 >> String.concat "\n")    //|> Array.map parseMonkey
+  |> Seq.map parseMonkey |> Seq.toList
 
-parseMonkey """Monkey 1:
-  Starting items: 54, 65, 75, 74
-  Operation: new = old + 6
-  Test: divisible by 19
-    If true: throw to monkey 2
-    If false: throw to monkey 0"""
+let turn (monkeys: Monkey list) monkeyId =
+  let monkey = monkeys[monkeyId]
+  let groups = monkey.Items |> List.map monkey.Inspect |> List.groupBy fst |> Map
+  [
+    for {Id = i; Items = items} as m in monkeys do
+      let thrown = groups |> Map.tryFind i |> Option.defaultValue [] |> List.map snd
+      if i = monkeyId then
+        { m with Items = thrown; Business = m.Business + items.Length }
+      else
+        { m with Items = items @ thrown }
+  ]
 
-let m = 
-    (File.ReadAllText "11.txt").Split("\r\n\r\n")
-    //|> Array.map parseMonkey
+let rec round (monkeys: Monkey list) = function
+  | 0 -> monkeys
+  | n ->
+    round ([0..monkeys.Length - 1] |> List.fold turn monkeys) (n - 1)
 
-printf $"'{m[0]}'"
-parseMonkey (m[0] |> string)
-parseMonkey """Monkey 0:
-  Starting items: 79, 98
-  Operation: new = old * 19
-  Test: divisible by 23
-    If true: throw to monkey 2
-    If false: throw to monkey 3"""  
+round monkeys 20 |> List.map (fun { Business = b } -> b) |> List.sort |> List.rev |> List.take 2 |> List.reduce (*)
