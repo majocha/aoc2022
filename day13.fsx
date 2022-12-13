@@ -7,7 +7,7 @@ let token pattern input =
 let (|Int|_|) = token @"\d+" >> Option.map (fun (s, rest) -> int s, rest)
 let (|LeftP|_|) = token @"\[" >> Option.map snd
 let (|RightP|_|) = token @"\]" >> Option.map snd
-let (|Coma|_|) = token @"," >> Option.map snd 
+let (|Comma|_|) = token @"," >> Option.map snd 
 
 let rec (|Packet|_|) = function
     | LeftP(PList [] (ps, RightP rest)) -> Some (Node (ps |> List.rev), rest)
@@ -15,7 +15,7 @@ let rec (|Packet|_|) = function
     | _ -> None
 
 and (|PList|_|) acc  = function
-    | Packet(p, Coma rest) -> (|PList|_|) (p :: acc) rest
+    | Packet(p, Comma rest) -> (|PList|_|) (p :: acc) rest
     | Packet (p, rest) -> Some ((p::acc), rest)
     | rest -> Some (acc, rest)
 
@@ -42,7 +42,7 @@ let packets =
     System.IO.File.ReadAllLines "13.txt"
     |> Seq.filter (System.String.IsNullOrEmpty >> not)
     |> Seq.map parse |> Seq.append [p2; p6] |> Seq.toArray
-    
+
 Array.sortInPlaceWith compareTrees packets
 let findIndex p = System.Array.IndexOf(packets, p) + 1
 let partTwo = findIndex p2 * findIndex p6
