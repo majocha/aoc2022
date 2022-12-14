@@ -26,8 +26,8 @@ let parse = function
 let rec compareTrees left right =
     match left, right with
     | Leaf l, Leaf r -> sign (l - r)
-    | Leaf d, right -> compareTrees (Node [Leaf d]) right
-    | left, Leaf d -> compareTrees left (Node [Leaf d])
+    | Leaf _, right -> compareTrees (Node [left]) right
+    | left, Leaf _ -> compareTrees left (Node [right])
     | Node ls, Node rs ->
         match ls, rs with
         | l :: ls, r :: rs ->
