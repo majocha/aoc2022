@@ -1,4 +1,4 @@
-#r "nuget: FSharpPlus, 1.2.5"
+#r "nuget: FSharpPlus"
 open FSharpPlus
 
 let input = System.IO.File.ReadAllLines "7.txt" |> toList
