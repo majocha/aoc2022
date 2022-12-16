@@ -34,10 +34,10 @@ let circumference ((x, y), r) =
     seq {
         let r = r + 1
         for i in 0..r do
-        x + i, y + r - i
-        x + i, y - r + i
-        x - r + i, y + i
-        x - r + i, y - i
+            x + i, y + r - i
+            x + i, y - r + i
+            x - r + i, y + i
+            x - r + i, y - i
     }
     
 let partTwoFast = 
