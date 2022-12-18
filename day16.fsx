@@ -4,36 +4,59 @@
 open FSharpPlus
 open System.Text.RegularExpressions
 
-let parseList s = s |> String.split [ ", " ]
+let parseList s = s |> String.split [ ", " ] |> toList
 let parseLine s = 
     let vs = [ for g in Regex.Match(s, @"Valve (\w+) has flow rate=(\d+); (?:tunnels|tunnel) (?:leads|lead) to (?:valves|valve) (.*)").Groups -> g.Value ]
-    vs[1], int vs[2], parseList vs[3]
+    vs[1], (int vs[2], parseList vs[3])
 
-let input = System.IO.File.ReadAllLines "16.txt" |> map parseLine
+let valves = System.IO.File.ReadAllLines "16.txt" |> map parseLine |> Map
 
-let flows = Map [ for v, f, _ in input do v, f ]
-let connections = Map [ for v, _, vs in input do v, vs ]
-type Action = Open of string | Move of string
-let score actions = actions |> List.indexed |> List.fold (fun total (i, a) -> match a with Open v -> flows[v] * i + total | _ -> total) 0
+let flow v = valves[v] |> fst
 
-let rec search =
-    fun actions t ->
-        match t with 
-        | 1 -> actions
-        | t ->
-            seq {
-                let t = t - 1
-                let current = match head actions with | Open v -> v | Move v -> v
-                if not (actions |> List.contains (Open current)) then
-                    yield search (Open current :: actions) t 
-                for v in connections[current] do
-                    yield search (Move v :: actions) t
+let connections v = valves[v] |> snd
 
-            } |> maxBy score
-    |> memoizeN
+type Action = Open of string * int | Move of string * int
 
-[
-    for i in 1..12 do
-        [ for v in connections.Keys do search [Move v] i ] |> maximum
-]
+let scoreAction = function Open (v, t) -> flow v * t | _ -> 0
+
+let getGScore opens = opens |> Map.values |> Seq.sumBy scoreAction
+
+let nextActions a =
+    [
+        match a with
+        | Move (v, t)  when t > 0 ->
+            yield Open (v, t - 1)
+            yield! connections v |> map (fun v -> Move (v, t - 1))
+        | Open (v, t) when t > 0 ->
+            yield! connections v |> map (fun v -> Move (v, t - 2))
+        | _ -> ()
+    ]
+
+let rec search opens = function 
+    | [] -> opens
+    | actions ->
+        let mutable opens = opens
+        let next = [
+            for a in actions |> sortByDescending scoreAction do
+                for n in nextActions a do
+                        match n with 
+                        | Open (v, t) as o ->
+                            if opens |> Map.add v o |> getGScore > getGScore opens then
+                                // need to record previous
+                                opens <- opens |> Map.add v o
+                                yield n
+                        | Move _ ->
+                            if opens |> length < 6 then yield n
+        ]
+        search opens next 
+
+let start () =
+    let o = Open("AA", 30)
+    let opens = ["AA", o] |> Map
+    search opens [o]
+
+start ()
+
+valves.Values |> filter (fun v -> fst v > 0) |> length
+
 
