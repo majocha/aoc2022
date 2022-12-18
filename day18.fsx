@@ -1,4 +1,5 @@
 #r "nuget:FSharpPlus"
+#time "on"
 open FSharpPlus
 
 let parseLine (str: string) =
@@ -8,10 +9,12 @@ let parseLine (str: string) =
 let cubes = System.IO.File.ReadAllLines "18.txt" |> Seq.map parseLine |> Set
 
 let moves = [
-    for x in [-1; 1] do
-        for y in [-1; 1] do
-            for z in [-1; 1] do
-                x, y, z
+    1, 0, 0
+    0, 1, 0
+    -1, 0, 0
+    0, -1, 0
+    0, 0, -1
+    0, 0, 1
 ]
 
 let inline (+++) (x, y, z) (dx, dy, dz) = x + dx, y + dy, z + dz
@@ -27,18 +30,31 @@ let rec search cubes toVisit visited score =
                     [
                         for m in moves do
                             let n = m +++ c
-                            if 
-                                cubes - visited |> Set.contains n
-                            then n
+                            if cubes |> Set.contains n then n
                     ]
-                ns, 6 - ns.Length
+                c, ns
         ]
-    let visited = visited + toVisit
-    let toVisit = (next |> List.collect fst |> Set) - toVisit
-    printfn "next to visit: %A" toVisit
-    if toVisit.IsEmpty then score else 
-        let score = score + (next |> List.sumBy snd)
+    let scoreAfterVisit = next |> List.map (fun (c, ns) -> c, 6 - length ns) |> Map
+    let score = score |> Map.union scoreAfterVisit
+    let neighbours = next |> List.collect snd |> Set
+    let toVisit, visited = neighbours - visited, visited + toVisit
+    if toVisit.IsEmpty then score |> Map.values |> sum else 
         search cubes toVisit visited score
 
-let s = Set [1,1,1; 2,1,1]
-let x = search s s Set.empty 0
+let test = [1,1,1; 2,1,1; 3, 1, 1; 10, 10, 10] |> Set
+search test Set[10, 10, 10] Set.empty Map.empty
+
+cubes |> Seq.maxBy item1
+cubes |> Set.minElement
+
+let vat =
+    [
+        for x in -1..22 do
+        for y in -1..22 do
+        for z in -1..22 do
+            x, y, z
+    ] |> Set
+
+search (vat - cubes) Set[0, 0, 0] Set.empty Map.empty 
+5900 - 3456
+3456
