@@ -2,11 +2,9 @@
 #time "on"
 open FSharpPlus
 
-let parseLine (str: string) =
-    let a = str.Split(',') |> Array.map int
-    a[0], a[1], a[2]
+let parseLine = sscanf "%d,%d,%d"
 
-let cubes = System.IO.File.ReadAllLines "18.txt" |> Seq.map parseLine |> Set
+let cubes = System.IO.File.ReadAllLines "18.txt" |> map parseLine |> Set
 
 let moves = [
     1, 0, 0
@@ -18,43 +16,36 @@ let moves = [
 ]
 
 let inline (+++) (x, y, z) (dx, dy, dz) = x + dx, y + dy, z + dz
-type Cube = int * int * int
-type Cubes = Set<Cube>
-
 
 let rec search cubes toVisit visited score = 
-    let next = 
+
+    let neighbours c =
         [
-            for c in toVisit do
-                let ns = 
-                    [
-                        for m in moves do
-                            let n = m +++ c
-                            if cubes |> Set.contains n then n
-                    ]
-                c, ns
+            for m in moves do
+                let n = m +++ c
+                if cubes |> Set.contains n then n
         ]
-    let scoreAfterVisit = next |> List.map (fun (c, ns) -> c, 6 - length ns) |> Map
-    let score = score |> Map.union scoreAfterVisit
-    let neighbours = next |> List.collect snd |> Set
-    let toVisit, visited = neighbours - visited, visited + toVisit
-    if toVisit.IsEmpty then score |> Map.values |> sum else 
-        search cubes toVisit visited score
 
-let test = [1,1,1; 2,1,1; 3, 1, 1; 10, 10, 10] |> Set
-search test Set[10, 10, 10] Set.empty Map.empty
+    let nextScore = score + (6 * Set.count toVisit) - (toVisit |> Seq.sumBy (neighbours >> length))
+    let nextVisited = visited + toVisit
+    let nextToVisit = (toVisit |> Seq.collect neighbours |> Set) - visited
+    if nextToVisit.IsEmpty then nextScore else 
+        search cubes nextToVisit nextVisited nextScore
 
-cubes |> Seq.maxBy item1
-cubes |> Set.minElement
+let cmin f = cubes |> map f |> minimum
+let cmax f = cubes |> map f |> maximum
+let x1, x2 = cmin item1 - 1, cmax item1 + 1
+let y1, y2 = cmin item2 - 1, cmax item2 + 1
+let z1, z2 = cmin item3 - 1, cmax item3 + 1
 
 let vat =
     [
-        for x in -1..22 do
-        for y in -1..22 do
-        for z in -1..22 do
+        for x in x1..x2 do
+        for y in y1..y2 do
+        for z in z1..z2 do
             x, y, z
     ] |> Set
 
-search (vat - cubes) Set[0, 0, 0] Set.empty Map.empty 
-5900 - 3456
-3456
+let partTwo = 
+    search (vat - cubes) Set[x1, y1, z1] Set.empty 0 
+  - search vat Set[x1, y1, z1] Set.empty 0
