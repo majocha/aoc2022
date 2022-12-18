@@ -29,8 +29,8 @@ let toBlock (str: string) =
 let blocks = blocksString.Split("\n\n") |> Array.map toBlock
 
 let displacement =
-    ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>" 
-    //System.IO.File.ReadAllText "17.txt"
+    //">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>" 
+    System.IO.File.ReadAllText "17.txt"
     |> Seq.map (function '>' -> 1 | '<' -> -1 | _ -> failwith "wrong char")
     |> Seq.toArray
 
@@ -90,34 +90,38 @@ let compact rocks =
             | ps -> ps |> map (fun p -> scores[p]) |> maximum
         
     let (hx,hy) as highest = rocks |> Set.filter (fun (x, _) -> x = 0) |> Seq.maxBy snd
-    let lowest = findPath [ highest ] (rocks |> Set.map (fun p -> p, 0) |> Map.ofSeq |> Map.add highest hy)
-    let compacted = rocks |> Set.filter (fun (_, y) -> y >= lowest) |> Set.map (fun (x, y) -> x, y - lowest)
-    printFinal compacted
-    compacted, lowest
+    if hy < 500 then
+        rocks, 0
+    else
+        let lowest = findPath [ highest ] (rocks |> Set.map (fun p -> p, 0) |> Map.ofSeq |> Map.add highest hy)
+        let compacted = rocks |> Set.filter (fun (_, y) -> y >= lowest) |> Set.map (fun (x, y) -> x, y - lowest)
+        // printFinal compacted
+        compacted, lowest
 
 let rec dropN N =
 
     let scanner rocks jetn bn =
         let jetn, dropped = drop rocks jetn bn 2 (4 + height rocks)
-        let rocks = rocks + dropped
-        rocks, 0, jetn
+        let rocks, h = compact (rocks + dropped)
+        rocks, h, jetn
 
     let bottom = Set [for x in 0..6 -> x, 0]
 
     let rec step rocks totalH jetn = function
         | n when n = N ->
-            (height rocks |> int64) + totalH, rocks
+            (height rocks |> int64) + totalH
         | n ->
             let rocks, h, jetn = scanner rocks jetn (int (n % 5L))
             step rocks (int64 h + totalH) jetn (n + 1L)
 
     step bottom 0L 0 0
 
-let _, rocks = dropN 20L
+#time "on"
+let x = [ for i in 1L..30L do i * 100L, dropN (i * 100L) ]
 
-printFinal rocks
 
-compact rocks //|> printFinal
+
+// compact rocks //|> printFinal
 
 
 
