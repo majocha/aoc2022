@@ -1,32 +1,49 @@
 #r "nuget:FSharpPlus"
 open FSharpPlus
 
-let blocksString =
-    """####
+let blocks = 
+    let toInt (data: int array) =
+        [0..3] |> List.fold (fun b i -> (b <<< 8) ^^^ data[i]) 0
+        <<< 4
 
-.#.
-###
-.#.
+    [|
+        [|
+            0
+            0
+            0  
+            0b1111
+        |]
 
-..#
-..#
-###
+        [|
+            0
+            0b0100
+            0b1110
+            0b0100
+        |]
 
-#
-#
-#
-#
+        [|
+            0
+            0b0010
+            0b0010
+            0b1110
+        |]
 
-##
-##"""
+        [|
+            0b1000
+            0b1000
+            0b1000
+            0b1000
+        |]
 
-let toBlock (str: string) =
-    let data = str.Split("\n") |> Array.rev
-    let h = data.Length
-    let w = data[0].Length
-    Set [for x in 0..w - 1 do for y in 0..h - 1 do if data[y][x] = '#' then (x,y)]
+        [|
+            0
+            0
+            0b1100
+            0b1100
+        |]
+    |] |> map toInt
 
-let blocks = blocksString.Split("\n\n") |> Array.map toBlock
+blocks |> iter (printfn "%032B")
 
 let displacement =
     //">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>" 
@@ -34,99 +51,80 @@ let displacement =
     |> Seq.map (function '>' -> 1 | '<' -> -1 | _ -> failwith "wrong char")
     |> Seq.toArray
 
-let hitWall block dx = block |> Set.exists (fun (x, _) -> x + dx < 0 || x + dx > 6)
+let inline hitsWall dx segment =
+    (segment >>> dx) &&& 0b10000000 = 0b10000000|| (segment >>> (dx - 1)) &&& 0b1 = 0b1
+let inline hitsRocks rockLayer dx segment = rockLayer &&& (segment >>> dx) <> 0
+let inline getSegment n block = (block >>> (n * 8)) &&& 0b11111111
 
-let hitRocks rocks block dx dy =
-    block |> Set.exists ( fun (x, y) -> rocks |> Set.contains (x + dx, y + dy))
-
-// let endless s = seq { while true do yield! s }
-let height rocks = rocks |> Seq.map snd |> Seq.max
-
-let print rocks block bx by =
-    let getchar y x  =
-        if rocks |> Set.contains(x, y) then "#"
-        elif block |> Set.contains (x - bx, y - by) then "@"
-        else "."
-
-    for y = height rocks + 5 downto 0 do
-        let row = String.init 7 (getchar y)
-        printfn $"|{row}|"
+let print (rocks: int array) h =
+    for y = h to rocks.Length - 1 do
+        [ for c in sprintf "|%07B|" rocks[y] do
+            match c with '0' -> '.' | '1' -> '#' | c -> c ]
+        |> String.ofList |> printfn "%s"
     printfn ""
 
-let printFinal rocks =
-    print rocks Set.empty 0 0
+let blocked (rocks: int array) block dx y =
+    [0..3] |> exists (fun n ->
+        let segment = getSegment n block
+        (hitsRocks rocks[y - n] dx segment) || (hitsWall dx segment)
+    )
 
-let rec drop rocks jetn bn  x y =
-    // printfn $"drop: {y}"
-    let block = blocks[bn]
-    // print rocks block x y
+let toRocks (rocks: int array) block x y =
+    for n in 0..3 do 
+        let segment = getSegment n block
+        rocks[y - n] <- rocks[y - n] ||| (segment >>> x)
+
+let rec drop rocks jetn block x y =
     let dx = displacement[jetn]
-    // printfn $"{dx} wall: {hitWall block (x + dx)} rocks: {hitRocks rocks block (x + dx) y}"
-    let x = if hitWall block (x + dx) || hitRocks rocks block (x + dx) y then x else x + dx
-    // print rocks block x y
+    let x = if blocked rocks block (x + dx) y then x else x + dx
     let nextJetn = (jetn + 1 ) % displacement.Length
-    if hitRocks rocks block x (y - 1) then
-        nextJetn,
-        block |> Set.map (fun (bx, by) -> bx + x, by + y) |> Set
-    else drop rocks nextJetn bn x (y - 1)
+    if blocked rocks block x (y + 1) then
+        do toRocks rocks block x y
+        nextJetn, y
+    else drop rocks nextJetn block x (y + 1)
 
-let compact rocks =
-    let moves = [for x in [1; 0; -1] do for y in [1; 0; -1] do x, y]
-    let rec findPath frindge (scores : Map<_,_>) =
-        let next = 
-            seq {
-                for (vx, vy) as v in frindge do
-                    for x, y in moves do
-                        let next = (vx + x, vy + y)
-                        let score = if scores[v] < vy + y then scores[v] else vy + y
-                        match scores |> Map.tryFind next with
-                        | Some sc when sc < score ->  yield next, score
-                        | _ -> ()
-            }
-        let toVisit, scores = next |> map fst, (scores |> Map.union (next |> Map.ofSeq))
-        if toVisit |> Seq.isEmpty then 0 else
-            match toVisit |> Seq.filter (fun (x, y) -> x = 6) |> toList with
-            | [] -> findPath toVisit scores
-            | ps -> ps |> map (fun p -> scores[p]) |> maximum
+// let compact rocks =
+//     let moves = [for x in [1; 0; -1] do for y in [1; 0; -1] do x, y]
+//     let rec findPath frindge (scores : Map<_,_>) =
+//         let next = 
+//             seq {
+//                 for (vx, vy) as v in frindge do
+//                     for x, y in moves do
+//                         let next = (vx + x, vy + y)
+//                         let score = if scores[v] < vy + y then scores[v] else vy + y
+//                         match scores |> Map.tryFind next with
+//                         | Some sc when sc < score ->  yield next, score
+//                         | _ -> ()
+//             }
+//         let toVisit, scores = next |> map fst, (scores |> Map.union (next |> Map.ofSeq))
+//         if toVisit |> Seq.isEmpty then 0 else
+//             match toVisit |> Seq.filter (fun (x, y) -> x = 6) |> toList with
+//             | [] -> findPath toVisit scores
+//             | ps -> ps |> map (fun p -> scores[p]) |> maximum
         
-    let (hx,hy) as highest = rocks |> Set.filter (fun (x, _) -> x = 0) |> Seq.maxBy snd
-    if hy < 500 then
-        rocks, 0
-    else
-        let lowest = findPath [ highest ] (rocks |> Set.map (fun p -> p, 0) |> Map.ofSeq |> Map.add highest hy)
-        let compacted = rocks |> Set.filter (fun (_, y) -> y >= lowest) |> Set.map (fun (x, y) -> x, y - lowest)
-        // printFinal compacted
-        compacted, lowest
+//     let (hx,hy) as highest = rocks |> Set.filter (fun (x, _) -> x = 0) |> Seq.maxBy snd
+//     if hy < 500 then
+//         rocks, 0
+//     else
+//         let lowest = findPath [ highest ] (rocks |> Set.map (fun p -> p, 0) |> Map.ofSeq |> Map.add highest hy)
+//         let compacted = rocks |> Set.filter (fun (_, y) -> y >= lowest) |> Set.map (fun (x, y) -> x, y - lowest)
+//         // printFinal compacted
+//         compacted, lowest
 
-let rec dropN N =
+let dropN N =
+    let rocks = Array.zeroCreate 4000
+    rocks[3999] <- 127
+    let rec findZero fromY =
+        if rocks[fromY] = 0 then fromY else findZero (fromY - 1)
 
-    let scanner rocks jetn bn =
-        let jetn, dropped = drop rocks jetn bn 2 (4 + height rocks)
-        let rocks, h = compact (rocks + dropped)
-        rocks, h, jetn
+    let rec step zeroY jetn n =
+        if n = N then 3998 - findZero 3999
+        else
+            let jetn, y = drop rocks jetn blocks[n % 5] 3 (zeroY - 3)
+            // print rocks ((findZero y) - 3)
+            step (findZero y) jetn (n + 1)
 
-    let bottom = Set [for x in 0..6 -> x, 0]
-
-    let rec step rocks totalH jetn = function
-        | n when n = N ->
-            (height rocks |> int64) + totalH
-        | n ->
-            let rocks, h, jetn = scanner rocks jetn (int (n % 5L))
-            step rocks (int64 h + totalH) jetn (n + 1L)
-
-    step bottom 0L 0 0
+    step 3998 0 0
 
 #time "on"
-let x = [ for i in 1L..30L do i * 100L, dropN (i * 100L) ]
-
-
-
-// compact rocks //|> printFinal
-
-
-
-
-
-
-
-
+dropN 2022
