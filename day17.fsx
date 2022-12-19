@@ -107,7 +107,7 @@ let dropSeq (jetn, layers) y startN takeEvery =
 let partOne = (dropSeq (0, [| 127uy |]) 0L 0L 2022L) |> skip 1 |> take 1 |> map snd |> toList
 
 let zeros = (dropSeq (0, [| 127uy |]) 0L 0L 5L) |> take 100_000 |> toList
-let magic = zeros |> Seq.countBy fst |> sortBy snd |> find (fun (j, c) -> c > 1) |> fst //|> map (snd >> length) //|> Seq.map (snd >> Seq.length) toList
+let magic = zeros |> Seq.countBy fst |> sortBy snd |> find (fun (j, c) -> c > 1) |> fst
 let ns, ys = zeros |> filter (fun (p, y) -> p = magic) |> map snd |> toList |> unzip
 let startsAtN, repeatsEveryN = ns[0], ns[2] - ns[1]
 let startsAt, repeatsEvery = ys[0], ys[2] - ys[1]
