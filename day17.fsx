@@ -44,21 +44,20 @@ let blocks =
     |] |> map toInt
 
 type CircularBuffer(bufferLength) =
-    let a = Array.create bufferLength 0
+    let a = Array.create bufferLength 0uy
     member _.Item
-        with get (y: int64) = a[int (y % int64 bufferLength)]
-        and set (y: int64) v = a[int (y % int64 bufferLength)] <- v
+        with get (y: int64) = a[int (if y >= 0 then y % int64 bufferLength else  (int64 bufferLength + y % int64 bufferLength - 1L))]
+        and set (y: int64) v = a[int (if y >= 0 then y % int64 bufferLength else (int64 bufferLength + y % int64 bufferLength - 1L))] <- v
 
 let jets =
-    //">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>" 
     System.IO.File.ReadAllText "17.txt"
     |> Seq.map (function '>' -> 1 | '<' -> -1 | _ -> failwith "wrong char")
     |> Seq.toArray
 
 let inline hitsWall dx segment =
-    (segment >>> dx) &&& 0b10000000 = 0b10000000|| (segment >>> (dx - 1)) &&& 0b1 = 0b1
-let inline hitsRocks rockLayer dx segment = rockLayer &&& (segment >>> dx) <> 0
-let inline getSegment n block = (block >>> (n * 8)) &&& 0b11111111
+    (segment >>> dx) &&& 0b10000000uy = 0b10000000uy|| (segment >>> (dx - 1)) &&& 0b1uy = 0b1uy
+let inline hitsRocks rockLayer dx segment = rockLayer &&& (segment >>> dx) <> 0uy
+let inline getSegment n block = (block >>> (n * 8)) |> byte
 
 let blocked (rocks: CircularBuffer) block dx y =
     [0..3] |> exists (fun n ->
@@ -77,24 +76,46 @@ let rec drop (rocks: CircularBuffer) jetn block x y =
     let nextJetn = (jetn + 1 ) % jets.Length
     if blocked rocks block x (y - 1L) then
         do toRocks rocks block x y
-        nextJetn, y
+        nextJetn
     else drop rocks nextJetn block x (y - 1L)
 
-let dropSeq buf =
-    let rocks = CircularBuffer(buf)
-    rocks[0] <- 127
-    let rec findEmpty fromY =
-        if rocks[fromY] = 0 then fromY else findEmpty (fromY + 1L)
-    let rec step eY jetn (n: int64) =
+let dropSeq (jetn, layers) y startN takeEvery =
+
+    let rocks = CircularBuffer(512)
+    for i = 0 to (layers |> Array.length) - 1 do
+        rocks[y - int64 i] <- layers[i]
+
+    let rec findHeight startH =
+        if rocks[startH] = 0uy then startH else findHeight (startH + 1L)
+
+    let rec step y jetn (n: int64) =
         seq {
-            for y in eY..eY + 7L do rocks[y] <- 0
-            let jetn, nexty = drop rocks jetn blocks[n % 5L |> int] 3 (eY + 3L)
-            let nexteY = (findEmpty nexty)
-            yield nexteY - eY
-            yield! step nexteY jetn (n + 1L)
+            let height = findHeight y
+            let bn = n % 5L |> int
+            if n % takeEvery = 0L  then
+                let layers = [| for i in height - 8L .. height - 1L do rocks[i] |]
+                yield (jetn, layers), (n, height - 1L)
+            for y in height..height + 7L do rocks[y] <- 0uy
+            let nextJetn = drop rocks jetn blocks[bn] 3 (height + 3L)
+            yield! step (findHeight height) nextJetn (n + 1L)
         }
-    step 1L 0 0L
+
+    step y jetn startN
 
 #time "on"
-let a = (dropSeq 64) |> take 2022 |> sum
 
+let partOne = (dropSeq (0, [| 127uy |]) 0L 0L 2022L) |> skip 1 |> take 1 |> map snd |> toList
+
+let zeros = (dropSeq (0, [| 127uy |]) 0L 0L 5L) |> take 100_000 |> toList
+let magic = zeros |> Seq.countBy fst |> sortBy snd |> find (fun (j, c) -> c > 1) |> fst //|> map (snd >> length) //|> Seq.map (snd >> Seq.length) toList
+let ns, ys = zeros |> filter (fun (p, y) -> p = magic) |> map snd |> toList |> unzip
+let startsAtN, repeatsEveryN = ns[0], ns[2] - ns[1]
+let startsAt, repeatsEvery = ys[0], ys[2] - ys[1]
+
+let cycles = (1000000000000L - startsAtN) / repeatsEveryN
+let y = startsAt + cycles * repeatsEvery
+let n = startsAtN + cycles * repeatsEveryN
+
+dropSeq magic (startsAt) (startsAtN) 2022L |> take 1 |> map snd |> head //|> head
+
+let partTwo = dropSeq magic y n 1000000000000L |> take 1 |> map snd |> head
