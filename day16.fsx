@@ -3,60 +3,54 @@
 
 open FSharpPlus
 open System.Text.RegularExpressions
-
+type Valve = { Name: string; Flow: int; Connections: string list }
 let parseList s = s |> String.split [ ", " ] |> toList
 let parseLine s = 
     let vs = [ for g in Regex.Match(s, @"Valve (\w+) has flow rate=(\d+); (?:tunnels|tunnel) (?:leads|lead) to (?:valves|valve) (.*)").Groups -> g.Value ]
-    vs[1], (int vs[2], parseList vs[3])
+    { Name = vs[1]; Flow = int vs[2]; Connections = parseList vs[3] }
 
-let valves = System.IO.File.ReadAllLines "16.txt" |> map parseLine |> Map
+let valves = System.IO.File.ReadAllLines "16.txt" |> map parseLine
+let getConnections n = (valves |> find (fun v -> v.Name = n)).Connections
+let valvesToOpen = valves |> filter (fun v -> v.Flow > 0) |> map (fun v -> v.Name) |> Set
+let getFlow =
+    let vs = [for v in valves -> v.Name, v.Flow] |> Map
+    fun n -> vs[n]
 
-let flow v = valves[v] |> fst
+let rec dijkstra dist = function
+    | [] -> dist
+    | toVisit ->
+        let dist = dist |> Map.union (Map toVisit)
+        [
+            for n, d in toVisit do
+                for c in getConnections n do
+                    match dist |> Map.tryFind c with
+                    | Some d1 when d + 1 < d1 ->
+                        yield c, d + 1
+                    | None -> yield c, d + 1
+                    | _ -> ()
+        ] |> dijkstra dist
 
-let connections v = valves[v] |> snd
+let distances = dijkstra Map.empty ["AA", 0]
 
-type Action = Open of string * int | Move of string * int
+let distance v1 v2 = abs (distances[v1] - distances[v2])
 
-let scoreAction = function Open (v, t) -> flow v * t | _ -> 0
+let totalFlow path = [ for valve, openingTime in path -> openingTime * getFlow valve] |> sum
 
-let getGScore opens = opens |> Map.values |> Seq.sumBy scoreAction
+let rec bestPath =
+    fun start valvesToOpen remainingTime ->
+        let potential =
+            seq {
+                for v in valvesToOpen do
+                    let time = remainingTime - 1 - distance start v
+                    if time >= 0 then
+                        (start, remainingTime) :: bestPath v (valvesToOpen |> Set.remove v) (time)
+                    else 
+                        [start, remainingTime]
+            } 
+        if potential |> Seq.isEmpty then []
+        else potential |> Seq.maxBy totalFlow 
+    |> memoizeN
 
-let nextActions a =
-    [
-        match a with
-        | Move (v, t)  when t > 0 ->
-            yield Open (v, t - 1)
-            yield! connections v |> map (fun v -> Move (v, t - 1))
-        | Open (v, t) when t > 0 ->
-            yield! connections v |> map (fun v -> Move (v, t - 2))
-        | _ -> ()
-    ]
+let x = bestPath "AA" (valvesToOpen |> Set.remove "AA") 29
 
-let rec search opens = function 
-    | [] -> opens
-    | actions ->
-        let mutable opens = opens
-        let next = [
-            for a in actions |> sortByDescending scoreAction do
-                for n in nextActions a do
-                        match n with 
-                        | Open (v, t) as o ->
-                            if opens |> Map.add v o |> getGScore > getGScore opens then
-                                // need to record previous
-                                opens <- opens |> Map.add v o
-                                yield n
-                        | Move _ ->
-                            if opens |> length < 6 then yield n
-        ]
-        search opens next 
-
-let start () =
-    let o = Open("AA", 30)
-    let opens = ["AA", o] |> Map
-    search opens [o]
-
-start ()
-
-valves.Values |> filter (fun v -> fst v > 0) |> length
-
-
+totalFlow x
