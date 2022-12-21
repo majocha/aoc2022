@@ -21,7 +21,6 @@ let getConnections =
     fun n -> vs[n]
 
 let totalFlow path = path |> map (fun (valve, openingTime) -> openingTime * getFlow valve) |> sum
-let noRepeats path = path |> length = (path |> Seq.distinctBy fst |> length)
 
 let rec bestPath1 =
     fun start valvesToOpen time ->
@@ -39,6 +38,35 @@ let rec bestPath1 =
     |> memoizeN
 
 let partOne = bestPath1 "AA" valvesToOpen 29 |> totalFlow
+
+
+// let rec bestPath =
+//     fun p1 p2 valvesToOpen time ->
+//         if time = 0 || valvesToOpen |> Set.isEmpty then []
+//         else
+//             seq {
+
+//                 let both = Set [p1; p2]
+//                 if p1 <> p2 && both.IsSubsetOf(valvesToOpen) then
+//                     yield (p2, time) :: (p1, time) :: bestPath p1 p2 (valvesToOpen - both) (time - 1)
+
+//                 if valvesToOpen |> Set.contains p2 then
+//                     for v1 in getConnections p1 do
+//                         yield (p2, time) :: bestPath v1 p2 (valvesToOpen |> Set.remove p2) (time - 1)
+
+//                 if valvesToOpen |> Set.contains p1 then
+//                     for v2 in getConnections p2 do
+//                         yield (p1, time) :: bestPath p1 v2 (valvesToOpen |> Set.remove p1) (time - 1)
+
+//                 for v1 in getConnections p1 do
+//                     for v2 in getConnections p2 do
+//                         yield bestPath v1 v2 valvesToOpen (time - 1)
+
+//             } |> Seq.filter (fun p -> totalFlow p < 1790) |> Seq.maxBy totalFlow 
+//     |> memoizeN
+
+
+// let partTwo = bestPath "AA" "AA" valvesToOpen 25 |> totalFlow
 
 let rec bestPath =
     fun p1 p2 valvesToOpen time ->
@@ -66,4 +94,4 @@ let rec bestPath =
     |> memoizeN
 
 
-let partTwo = bestPath "AA" "AA" valvesToOpen 25 |> totalFlow
+let partTwo = bestPath "AA" "AA" valvesToOpen 25 //|> totalFlow

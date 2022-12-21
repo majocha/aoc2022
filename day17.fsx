@@ -105,9 +105,9 @@ let dropSeq (jetn, layers) y startN takeEvery =
 #time "on"
 let result = Seq.take 1 >> Seq.map snd >> Seq.head
 
-let partOne = (dropSeq (0, [| 127uy |]) 0L 0L 2022L) |> Seq.skip 1 |> result
+let partOne = dropSeq (0, [| 127uy |]) 0L 0L 2022L |> Seq.skip 1 |> result
 
-let zeros = (dropSeq (0, [| 127uy |]) 0L 0L 5L) |> Seq.take 100_000 |> Seq.toList
+let zeros = dropSeq (0, [| 127uy |]) 0L 0L 5L |> Seq.take 100_000 |> Seq.toList
 let magic = zeros |> Seq.countBy fst |> Seq.sortBy snd |> Seq.find (fun (j, c) -> c > 1) |> fst
 let repeating f = zeros |> Seq.filter (fun (p, _) -> p = magic) |> Seq.map snd |> Seq.map f |> Seq.take 3 |> Seq.toArray
 let ns, ys = repeating fst, repeating snd
