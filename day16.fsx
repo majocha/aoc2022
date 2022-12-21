@@ -10,47 +10,60 @@ let parseLine s =
     { Name = vs[1]; Flow = int vs[2]; Connections = parseList vs[3] }
 
 let valves = System.IO.File.ReadAllLines "16.txt" |> map parseLine
-let getConnections n = (valves |> find (fun v -> v.Name = n)).Connections
 let valvesToOpen = valves |> filter (fun v -> v.Flow > 0) |> map (fun v -> v.Name) |> Set
+
 let getFlow =
     let vs = [for v in valves -> v.Name, v.Flow] |> Map
     fun n -> vs[n]
 
-let rec dijkstra dist = function
-    | [] -> dist
-    | toVisit ->
-        let dist = dist |> Map.union (Map toVisit)
-        [
-            for n, d in toVisit do
-                for c in getConnections n do
-                    match dist |> Map.tryFind c with
-                    | Some d1 when d + 1 < d1 ->
-                        yield c, d + 1
-                    | None -> yield c, d + 1
-                    | _ -> ()
-        ] |> dijkstra dist
+let getConnections =
+    let vs = [for v in valves -> v.Name, v.Connections] |> Map
+    fun n -> vs[n]
 
-let distances = dijkstra Map.empty ["AA", 0]
+let totalFlow path = path |> map (fun (valve, openingTime) -> openingTime * getFlow valve) |> sum
+let noRepeats path = path |> length = (path |> Seq.distinctBy fst |> length)
 
-let distance v1 v2 = abs (distances[v1] - distances[v2])
-
-let totalFlow path = [ for valve, openingTime in path -> openingTime * getFlow valve] |> sum
-
-let rec bestPath =
-    fun start valvesToOpen remainingTime ->
-        let potential =
+let rec bestPath1 =
+    fun start valvesToOpen time ->
+        if time = 0 || valvesToOpen |> Set.isEmpty then []
+        else
             seq {
-                for v in valvesToOpen do
-                    let time = remainingTime - 1 - distance start v
-                    if time >= 0 then
-                        (start, remainingTime) :: bestPath v (valvesToOpen |> Set.remove v) (time)
-                    else 
-                        [start, remainingTime]
-            } 
-        if potential |> Seq.isEmpty then []
-        else potential |> Seq.maxBy totalFlow 
+
+                if valvesToOpen |> Set.contains start then
+                        yield (start, time) :: bestPath1 start (valvesToOpen |> Set.remove start) (time - 1)
+
+                for v in getConnections start do
+                        yield bestPath1 v valvesToOpen (time - 1)
+
+            } |> Seq.maxBy totalFlow 
     |> memoizeN
 
-let x = bestPath "AA" (valvesToOpen |> Set.remove "AA") 29
+let partOne = bestPath1 "AA" valvesToOpen 29 |> totalFlow
 
-totalFlow x
+let rec bestPath =
+    fun p1 p2 valvesToOpen time ->
+        if time = 0 || valvesToOpen |> Set.isEmpty then []
+        else
+            seq {
+
+                let both = Set [p1; p2]
+                if p1 <> p2 && both.IsSubsetOf(valvesToOpen) then
+                    yield (p2, time) :: (p1, time) :: bestPath p1 p2 (valvesToOpen - both) (time - 1)
+
+                if valvesToOpen |> Set.contains p2 then
+                    for v1 in getConnections p1 do
+                        yield (p2, time) :: bestPath v1 p2 (valvesToOpen |> Set.remove p2) (time - 1)
+
+                if valvesToOpen |> Set.contains p1 then
+                    for v2 in getConnections p2 do
+                        yield (p1, time) :: bestPath p1 v2 (valvesToOpen |> Set.remove p1) (time - 1)
+
+                for v1 in getConnections p1 do
+                    for v2 in getConnections p2 do
+                        yield bestPath v1 v2 valvesToOpen (time - 1)
+
+            } |> Seq.filter (fun p -> totalFlow p < 1790) |> Seq.maxBy totalFlow 
+    |> memoizeN
+
+
+let partTwo = bestPath "AA" "AA" valvesToOpen 25 |> totalFlow

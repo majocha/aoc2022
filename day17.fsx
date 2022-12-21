@@ -46,7 +46,7 @@ let inline circular length i =
 
 type CircularBuffer(length) =
     let a = Array.create length 0uy
-    member _.Item with get i = a[circular length i]and set i v = a[circular length i] <- v
+    member _.Item with get i = a[circular length i] and set i v = a[circular length i] <- v
 
 let jets =
     System.IO.File.ReadAllText "17.txt"
