@@ -35,67 +35,106 @@ let turn d t =
 
 let dirMove = function Dir.Right -> 1, 0 | Dir.Down -> 0, 1 | Dir.Left -> -1, 0 | Dir.Up -> 0, -1 | _ -> 0, 0
 
-let wrap (x,y) = (x + boardWidth) % boardWidth, (y + boardHeight) % boardHeight
-
-let inline (++) (x, y) (dx, dy) = (x + dx, y + dy) |> wrap
-
 let getTile (x,y) = board[x, y]
 
 let rec nextInDir p dir =
+    let inline wrap (x,y) = (x + boardWidth) % boardWidth, (y + boardHeight) % boardHeight
+    let inline (++) (x, y) (dx, dy) = (x + dx, y + dy) |> wrap
     let p = p ++ dirMove dir
     match getTile p  with
     | ' ' -> nextInDir p dir
-    | t -> t, p
+    | t -> dir, t, p
 
 let vis = Array2D.copy board
 
-let rec forward p dir n =
-    if n = 0 then p else
+let rec forward move p dir n =
+    if n = 0 then dir, p else
         let x, y = p
         vis[x, y] <- match dir with | Dir.Right -> '>' | Dir.Down -> 'v' | Dir.Left -> '<' | _ -> '^'
-        match nextInDir p dir with 
-        | '#', _ -> p
-        | _ , p' -> forward p' dir (n - 1)
+        match move p dir with 
+        | _, '#', _ -> dir, p
+        | dir, _ , p -> forward move p dir (n - 1)
 
-let rec enterPass p dir = function
-    | Forward n :: rest -> enterPass (forward p dir n) dir rest
-    | t :: rest -> enterPass p (turn dir t) rest
+let rec enterPass move p dir = function
+    | Forward n :: rest -> 
+        let dir, p = forward move p dir n
+        enterPass move p dir rest
+    | t :: rest -> enterPass move p (turn dir t) rest
     | [] -> p, dir
 
 let startPos = board[*, 0] |> Array.findIndex (fun c -> c = '.'), 0
 
-let printVis () =
+let printVis _ =
+    // Async.Sleep 700 |> Async.RunSynchronously
     use f = new System.IO.StreamWriter("vis22.txt")
     for y in 0..boardHeight-1 do
         for x in 0..boardWidth-1 do
             f.Write(vis[x, y])
         f.Write("\n")
 
-let partOne = 
-    let (x, y), d = enterPass startPos Dir.Right program
+// let partOne = 
+//     let (x, y), d = enterPass nextInDir startPos Dir.Right program
+//     printVis()
+//     1000 * (y + 1) + 4 * (x + 1) + (int d)
+
+let side = 50
+
+let faces = 
+    [
+        for y = 0 to boardHeight / side - 1 do
+            for x = 0 to boardWidth / side - 1 do
+                if getTile (x * side,y * side) <> ' ' then x, y
+    ]
+
+let connections =
+    let cs =
+        [
+            (0, Dir.Right), (1, Dir.Left), true
+            (0, Dir.Down), (2, Dir.Up), true
+            (3, Dir.Right), (4, Dir.Left), true
+            (2, Dir.Down), (4, Dir.Up), true
+            (3, Dir.Down), (5, Dir.Up), true
+            (1, Dir.Down), (2, Dir.Right), true
+            (4, Dir.Down), (5, Dir.Right), true
+            (1, Dir.Right), (4, Dir.Right), false
+            (2, Dir.Left), (3, Dir.Up), true
+            (0, Dir.Left), (3, Dir.Left), false
+            (0, Dir.Up), (5, Dir.Left), true
+            (1, Dir.Up), (5, Dir.Down), true
+        ]
+    List.concat [ cs; cs |> List.map( fun (e1, e2, b) -> e2, e1, b)]
+    |> map (fun (e1, e2, b) -> e1, (e2, b)) |> Map
+
+let edge fid dir =
+    let fx, fy = faces[fid]
+    match dir with
+    | Dir.Up -> [ for x in 0..side - 1 -> x + fx * side, fy * side ]
+    | Dir.Down -> [ for x in 0..side - 1 -> x + fx * side, side - 1 + fy * side ]
+    | Dir.Left -> [ for y in 0..side - 1 -> fx * side, y + fy * side ]
+    | Dir.Right -> [ for y in 0..side - 1 -> fx * side + side - 1, y + fy * side ]
+
+let reverseDir dir = (int dir + 2) % 4 |> enum<Dir>
+
+let cubeWrap p dir =
+    match [0..5] |> tryFind (fun f -> edge f dir |> List.contains p) with
+    | Some fid ->
+        let (f2, d2), r = connections[fid, dir]
+        let e1 = edge fid dir
+        let e2 = if r then edge f2 d2 else edge f2 d2 |> rev
+        let newPos = e2 |> item (e1 |> List.findIndex (fun p' -> p' = p))
+        Some (reverseDir d2, newPos)
+    | _ -> None
+
+let rec nextInDir2 p dir =
+    let inline (++) (x, y) (dx, dy) = (x + dx, y + dy)
+    let dir, p = (cubeWrap p dir) |> Option.defaultValue (dir, p ++ dirMove dir)
+    dir, getTile p, p
+
+let partTwo =
+    // let f = tap (printVis) >> nextInDir2
+    let (x, y), d = enterPass nextInDir2 startPos Dir.Right program
     printVis()
     1000 * (y + 1) + 4 * (x + 1) + (int d)
 
-
-let cubeCuts side = [
-    [
-        [ for y in [side .. -1 .. 0] -> Dir.Left, (side * 2, y) ]
-        [ for x in [side * 2 .. side * 3 - 1] -> Dir.Up, (x, 0) ]
-        [ for y in 0 .. side * 2 - 1 -> Dir.Right, (3 * side - 1, y) ]
-    ] |> List.concat
-
-    [
-        [ for x in side * 3 .. side * 4 - 1 -> Dir.Up, (x, side * 2) ]
-        [ for y in side * 2 .. side * 3 - 1 -> Dir.Right, (3 * side - 1, y) ]
-        [ for x in [4 * side - 1 .. -1 .. 2 * side] -> Dir.Down, (x, 3 * side - 1) ]
-        [ for y in [3 * side - 1 .. -1 .. 2 * side] -> Dir.Left, (2 * side, y) ]
-    ] |> List.concat
-
-    [
-        [ for x in [2 * side - 1 .. -1 .. 0] -> Dir.Down, (x, 2 * side - 1) ]
-        [ for y in [side * 2 - 1 .. -1 ..  side] -> Dir.Left, (0, y) ]
-        [ for x in 0 .. side * 2 - 1 -> Dir.Up, (x, side) ]
-    ] |> List.concat
-]
-
+connections.Keys |> toList
 
