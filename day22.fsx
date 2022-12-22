@@ -31,13 +31,11 @@ let program  = parseProgram [] programInput
 type Dir = Right = 0 | Down = 1 | Left = 2 | Up = 3
 let turn d t = 
     let rotate = match t with  Left -> -1 | Right -> 1 | _ -> 0
-    ((int d) + rotate) % 4 |> enum<Dir>
+    ((int d + 4) + rotate) % 4 |> enum<Dir>
 
 let dirMove = function Dir.Right -> 1, 0 | Dir.Down -> 0, 1 | Dir.Left -> -1, 0 | Dir.Up -> 0, -1 | _ -> 0, 0
 
-let wrap (x,y) = 
-    (if x < 0 then (x % boardWidth) + boardWidth else x % boardWidth), 
-    (if y < 0 then (y % boardHeight) + boardHeight else y % boardHeight)
+let wrap (x,y) = (x + boardWidth) % boardWidth, (y + boardHeight) % boardHeight
 
 let inline (++) (x, y) (dx, dy) = (x + dx, y + dy) |> wrap
 
@@ -66,10 +64,6 @@ let rec enterPass p dir = function
 
 let startPos = board[*, 0] |> Array.findIndex (fun c -> c = '.'), 0
 
-let partOne = 
-    let (x, y), d = enterPass startPos Dir.Right program
-    1000 * (y + 1) + 4 * (x + 1) + (int d)
-
 let printVis () =
     use f = new System.IO.StreamWriter("vis22.txt")
     for y in 0..boardHeight-1 do
@@ -77,5 +71,9 @@ let printVis () =
             f.Write(vis[x, y])
         f.Write("\n")
 
-printVis()
+let partOne = 
+    let (x, y), d = enterPass startPos Dir.Right program
+    printVis()
+    1000 * (y + 1) + 4 * (x + 1) + (int d)
+
 
