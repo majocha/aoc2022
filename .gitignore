@@ -477,4 +477,4 @@ $RECYCLE.BIN/
 *.lnk
 
 # AoC input files
-[0-9]*.txt
+*.txt

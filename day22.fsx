@@ -8,7 +8,7 @@ let mapInput = input |> takeWhile (fun line -> line <> "")
 let boardWidth = mapInput |> map String.length |> maximum
 let boardHeight = mapInput |> length
 let paddedMapInput = mapInput |> map (fun s -> s.PadRight(boardWidth))
-let board = Array.init boardHeight (fun y -> Array.init boardWidth (fun x -> printfn "%d %d" y x; paddedMapInput[y][x]))
+let board = Array2D.init boardWidth boardHeight (fun x y -> paddedMapInput[y][x])
 let programInput = input |> skipWhile (fun line -> line <> "") |> skip 1 |> Array.exactlyOne
 
 type Move = Left | Right | Forward of int
@@ -26,6 +26,56 @@ let rec parseProgram acc = function
     | Turn (dir, rest) -> parseProgram (dir :: acc) rest
     | _ -> acc |> rev
 
-parseProgram [] programInput
+let program  = parseProgram [] programInput
 
+type Dir = Right = 0 | Down = 1 | Left = 2 | Up = 3
+let turn d t = 
+    let rotate = match t with  Left -> -1 | Right -> 1 | _ -> 0
+    ((int d) + rotate) % 4 |> enum<Dir>
+
+let dirMove = function Dir.Right -> 1, 0 | Dir.Down -> 0, 1 | Dir.Left -> -1, 0 | Dir.Up -> 0, -1 | _ -> 0, 0
+
+let wrap (x,y) = 
+    (if x < 0 then (x % boardWidth) + boardWidth else x % boardWidth), 
+    (if y < 0 then (y % boardHeight) + boardHeight else y % boardHeight)
+
+let inline (++) (x, y) (dx, dy) = (x + dx, y + dy) |> wrap
+
+let getTile (x,y) = board[x, y]
+
+let rec nextInDir p dir =
+    let p = p ++ dirMove dir
+    match getTile p  with
+    | ' ' -> nextInDir p dir
+    | t -> t, p
+
+let vis = Array2D.copy board
+
+let rec forward p dir n =
+    if n = 0 then p else
+        let x, y = p
+        vis[x, y] <- match dir with | Dir.Right -> '>' | Dir.Down -> 'v' | Dir.Left -> '<' | _ -> '^'
+        match nextInDir p dir with 
+        | '#', _ -> p
+        | _ , p' -> forward p' dir (n - 1)
+
+let rec enterPass p dir = function
+    | Forward n :: rest -> enterPass (forward p dir n) dir rest
+    | t :: rest -> enterPass p (turn dir t) rest
+    | [] -> p, dir
+
+let startPos = board[*, 0] |> Array.findIndex (fun c -> c = '.'), 0
+
+let partOne = 
+    let (x, y), d = enterPass startPos Dir.Right program
+    1000 * (y + 1) + 4 * (x + 1) + (int d)
+
+let printVis () =
+    use f = new System.IO.StreamWriter("vis22.txt")
+    for y in 0..boardHeight-1 do
+        for x in 0..boardWidth-1 do
+            f.Write(vis[x, y])
+        f.Write("\n")
+
+printVis()
 
