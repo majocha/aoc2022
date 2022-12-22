@@ -77,3 +77,25 @@ let partOne =
     1000 * (y + 1) + 4 * (x + 1) + (int d)
 
 
+let cubeCuts side = [
+    [
+        [ for y in [side .. -1 .. 0] -> Dir.Left, (side * 2, y) ]
+        [ for x in [side * 2 .. side * 3 - 1] -> Dir.Up, (x, 0) ]
+        [ for y in 0 .. side * 2 - 1 -> Dir.Right, (3 * side - 1, y) ]
+    ] |> List.concat
+
+    [
+        [ for x in side * 3 .. side * 4 - 1 -> Dir.Up, (x, side * 2) ]
+        [ for y in side * 2 .. side * 3 - 1 -> Dir.Right, (3 * side - 1, y) ]
+        [ for x in [4 * side - 1 .. -1 .. 2 * side] -> Dir.Down, (x, 3 * side - 1) ]
+        [ for y in [3 * side - 1 .. -1 .. 2 * side] -> Dir.Left, (2 * side, y) ]
+    ] |> List.concat
+
+    [
+        [ for x in [2 * side - 1 .. -1 .. 0] -> Dir.Down, (x, 2 * side - 1) ]
+        [ for y in [side * 2 - 1 .. -1 ..  side] -> Dir.Left, (0, y) ]
+        [ for x in 0 .. side * 2 - 1 -> Dir.Up, (x, side) ]
+    ] |> List.concat
+]
+
+
