@@ -49,29 +49,38 @@ module PartTwo =
     let rec calc human = function
         | Number d -> d
         | Human -> human
+        | Root (p1, p2) -> (calc human p1) - (calc human p2) |> abs
         | Operation (op, p1, p2) -> calcOp op (calc human p1) (calc human p2)
-        | _ -> failwith "error"
 
-    let (Root (p1, p2)) = parseOp "root"
-    let constantBranch = calc 0L p2
+    let rec (|HumanBranch|_|) = function
+        | Human -> Some ()
+        | (Operation(_, HumanBranch _, _)) -> Some ()
+        | (Operation (_, _, HumanBranch _)) -> Some ()
+        | _ -> None
 
-    let calcH human = abs (constantBranch - calc human p1) 
+    let rec (|PreCalc|_|) = function
+        | HumanBranch -> None
+        | Number d -> Some d
+        | Operation (op, PreCalc d1, PreCalc d2) -> calcOp op d1 d2 |> Some
+        | Operation (_, HumanBranch, _) | Operation (_, _, HumanBranch) -> None
+        | _ -> None
+
+    let rec precalc = function
+        | PreCalc d -> Number d
+        | Root( p1, p2 ) -> Root (precalc p1, precalc p2)
+        | t -> t
+
+    let tree = parseOp "root" |> precalc
+    let (Root(_, Number constantBranch)) = tree
 
     let rand = System.Random()
     let rec shoot best besth count =
         if count > 50_000 then besth else
-            let r = rand.NextInt64(besth - best - 5000L, besth + best + 5000L)
-            let c = calcH r
-            if c < best then
+            let r = rand.NextInt64(besth - best - 1000L, besth + best + 1000L)
+            let c = calc r tree
+            if c < best || c = best && r < besth then
                 printfn $"h: {r} dist: {c}"
                 shoot c r (count + 1)
             else shoot best besth (count + 1)
 
-    let approx = shoot constantBranch constantBranch 0
-    let partTwo = 
-    [| 
-        for i in approx - 5000L .. approx + 5000L do
-        let c = calcH i
-        if c = 0 then i
-    |] |> minimum
-
+    let partTwo = shoot constantBranch constantBranch 0
