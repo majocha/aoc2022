@@ -8,7 +8,7 @@ let sizeY = input.Length - 2
 
 let inline (++) (x, y) (dx, dy) = x + dx, y + dy
 
-type BlizzardMap(a: int[,], d) =
+type BlizzardMap(c: char, a: int[,], d) =
     let dx, dy = d
     let sizeX, sizeY = a.GetLength 0, a.GetLength 1
     let wrap x size = if (x % size) < 0 then (x % size) + size else x % size
@@ -17,6 +17,7 @@ type BlizzardMap(a: int[,], d) =
     member _.AtTime p t =
         let xt, yt = p ++ (dx * t, dy * t) |> wrap2
         a[xt, yt]
+    member this.CharAtTime p t = if this.AtTime p t = 1 then Some c else None
 
 let pointAtTime =
     let countChar c x y = if input[y + 1][x + 1] = c then 1 else 0
@@ -27,24 +28,38 @@ let pointAtTime =
             '>', (1, 0)
             '^', (0, -1)
             'v', (0, 1)
-        ] |> map (fun (c, d) -> BlizzardMap((init c), d))
+        ] |> map (fun (c, d) -> BlizzardMap(c, (init c), d))
     fun p t -> bs |> List.sumBy (fun b -> b.AtTime p t)
 
+let CharAtTime =
+    let countChar c x y = if input[y + 1][x + 1] = c then 1 else 0
+    let init c = Array2D.init sizeX sizeY (countChar c)
+    let bs = 
+        [
+            '<', (-1, 0)
+            '>', (1, 0)
+            '^', (0, -1)
+            'v', (0, 1)
+        ] |> map (fun (c, d) -> BlizzardMap(c, (init c), d))
+    fun p t ->
+        let chars = bs |> List.map (fun b -> b.CharAtTime p t) |> List.filter (Option.isSome)
+        if chars.Length = 0 then '.' 
+        elif chars.Length > 1 then (chars.Length.ToString() |> Seq.item 0) 
+        else chars |> List.exactlyOne |> Option.get
 
 
-let vis t =
+let vis t p =
     use f = new System.IO.StreamWriter "vis24.txt"
     for y in 0..sizeY - 1 do
         for x in 0..sizeX - 1 do
-            let v = pointAtTime (x, y) t
-            fprintf f "%c" (if v = 0 then '.' elif v = 1 then '+' else '#')
+            let c = CharAtTime (x, y) t
+            fprintf f "%c" c
         fprintfn f ""
 
-let visn n =
-    for t in 1..n do
-        vis t
-        Async.Sleep 500 |> Async.RunSynchronously
-
+let visAll moves =
+    for t, m in moves |> List.indexed do
+        vis (t + 1) m
+        Async.Sleep 1000 |> Async.RunSynchronously
 
 
 let moves =
@@ -53,31 +68,34 @@ let moves =
         0, 1
         -1, 0
         0, -1
+        0, 0
     ]
 
+let isStart (x,y) = (x, y) = (0, -1)
 let isFinish (x,y) = (x, y) = (sizeX - 1, sizeY)
 let inBounds (x, y) =
-    isFinish (x, y) || x >= 0 && x < sizeX - 1 && y >= 0 && y < sizeY - 1
+    isStart (x, y) || isFinish (x, y) || (x >= 0 && x < sizeX && y >= 0 && y < sizeY)
 
-let validMove t n = n |> inBounds && pointAtTime n t = 0
+let validMove t n = n |> inBounds && pointAtTime n (t + 1) = 0
+let getNext p t =
+    seq { 
+        for m in moves do
+            if validMove (t + 1) (p ++ m) then 
+                yield p ++ m
+    }
 
-let rec search = 
-    let bestTimes = Array2D.create sizeX sizeY System.Int32.MaxValue
-    let getBest (x, y) = bestTimes[x, y]
-    let updateBest (x, y) t = bestTimes[x, y] <- t
-    fun tpoints ->
-        match tpoints |> Seq.tryFind(fun (p ,t) -> isFinish p) with
-        | Some (_, t) -> t
-        | _ -> 
-            [
-                for p, t in tpoints do
-                    for m in moves do
-                        for t' in t .. t + 10 do
-                            let n = p ++ m// maxWait
-                            if validMove t' n && getBest n > t'
-                                then
-                                    updateBest n t'
-                                    n, t'
-            ] |> search
+let rec search p t limit acc = 
+    if isFinish p then t, acc
+    else 
+        seq {
+            if t < limit then 
+                for next in getNext p t do
+                    search next (t + 1) limit (next :: acc)
+            System.Int32.MaxValue, []
+        } |> Seq.minBy fst
 
-search [(0, -1), 0]
+// let res = (search (0, -1) 0 50 []) |> snd
+// res |> rev |> take 2 |> visAll
+
+vis 0 (0, -1)
+
