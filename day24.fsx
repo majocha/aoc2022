@@ -6,7 +6,6 @@ let input = System.IO.File.ReadAllLines "24.txt"
 let sizeX = input[0].Length - 2
 let sizeY = input.Length - 2
 
-let inline (++) (x, y) (dx, dy) = x + dx, y + dy
 
 type BlizzardMap(c: char, a: int[,], d) =
     let dx, dy = d
@@ -14,8 +13,8 @@ type BlizzardMap(c: char, a: int[,], d) =
     let wrap x size = if (x % size) < 0 then (x % size) + size else x % size
     let wrap2 (x, y) = wrap x sizeX, wrap y sizeY
     override _.ToString() = sprintf "%A" a
-    member _.AtTime p t =
-        let xt, yt = p ++ (dx * t, dy * t) |> wrap2
+    member _.AtTime (x, y) t =
+        let xt, yt = (x - dx * t, y - dy * t) |> wrap2
         a[xt, yt]
     member this.CharAtTime p t = if this.AtTime p t = 1 then Some c else None
 
@@ -52,14 +51,14 @@ let vis t p =
     use f = new System.IO.StreamWriter "vis24.txt"
     for y in 0..sizeY - 1 do
         for x in 0..sizeX - 1 do
-            let c = CharAtTime (x, y) t
+            let c = if p = (x, y) then 'E' else CharAtTime (x, y) t 
             fprintf f "%c" c
         fprintfn f ""
 
 let visAll moves =
     for t, m in moves |> List.indexed do
         vis (t + 1) m
-        Async.Sleep 1000 |> Async.RunSynchronously
+        Async.Sleep 500 |> Async.RunSynchronously
 
 
 let moves =
@@ -76,7 +75,8 @@ let isFinish (x,y) = (x, y) = (sizeX - 1, sizeY)
 let inBounds (x, y) =
     isStart (x, y) || isFinish (x, y) || (x >= 0 && x < sizeX && y >= 0 && y < sizeY)
 
-let validMove t n = n |> inBounds && pointAtTime n (t + 1) = 0
+let validMove t n =
+    isFinish n || n |> inBounds && pointAtTime n (t + 1) = 0
 let getNext p t =
     seq { 
         for m in moves do
@@ -84,18 +84,25 @@ let getNext p t =
                 yield p ++ m
     }
 
-let rec search p t limit acc = 
-    if isFinish p then t, acc
-    else 
-        seq {
-            if t < limit then 
-                for next in getNext p t do
-                    search next (t + 1) limit (next :: acc)
-            System.Int32.MaxValue, []
-        } |> Seq.minBy fst
+let rec search = 
+    fun ((x, y) as p) t ->
+        if isFinish p then t + 1
+        else 
+            let limit = sizeX + sizeY * 5
+            seq {
+                if t < limit then 
+                    for next in getNext p t do
+                        yield search next (t + 1)
+                yield System.Int32.MaxValue
+            } |> minimum
+    |> memoizeN
 
-// let res = (search (0, -1) 0 50 []) |> snd
-// res |> rev |> take 2 |> visAll
+let res = search (0, -1) 1
+// res |> length
+// res |> rev
 
-vis 0 (0, -1)
+// vis 17 (5, 3)
+// validMove 17 (5, 4)
+// sizeX + sizeY
+
 
