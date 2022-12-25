@@ -18,9 +18,9 @@ let digitToChar = function
     | -2 -> '='
     | _ -> failwith "wrong digit"
 
-let toBase10 (snafu: string) =
+let toBase10 snafu =
     let folder acc c = 5L * acc + (c |> charToDigit |> int64)
-    snafu |> Seq.fold folder 0
+    snafu |> fold folder 0
 
 let toSnafu number = 
     let rec loop number acc =
@@ -30,9 +30,9 @@ let toSnafu number =
                 (number + 5L) / 5L, digit - 5
             else number / 5L, digit
         if q = 0L then 
-            digit :: acc |> map digitToChar |> String.ofList else
+            digit :: acc else
             loop q (digit :: acc)
-    loop number []
+    loop number [] |> map digitToChar |> String.ofList
 
 let result =
     System.IO.File.ReadAllLines "25.txt"
