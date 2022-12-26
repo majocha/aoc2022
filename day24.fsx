@@ -39,8 +39,9 @@ let moves =
 
 let rec searchFromTo start finish startTime =
 
-    let inBounds (x, y) = (x >= 0 && x < sizeX && y >= 0 && y < sizeY)
-    let validMove t n = n = start || n = finish || n |> inBounds && pointAtTime n (t + 1) = 0
+    let inBounds (x, y) = x >= 0 && x < sizeX && y >= 0 && y < sizeY
+    let validMove t n = 
+        n = start || n = finish || n |> inBounds && pointAtTime n (t + 1) = 0
     let getNext p t =
         seq { 
             for m in moves do
