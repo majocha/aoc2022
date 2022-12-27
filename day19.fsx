@@ -3,24 +3,20 @@
 open FSharpPlus
 
 type Resource = Ore | Clay | Obsidian | Geode
-
 type Robot = Robot of producing: Resource
-
-type Cost = Map<Resource, int>
+type Cost = (Resource * int) list
 type Costs = Map<Robot, Cost>
-
-type Decision = Construct of Robot * constructedAt: int
-type Decisions = Decision list
+type State = State of resources: Map<Resource, int> * robots: Map<Robot, int>
 
 let parseBlueprint s =
     let i, a, b, c, d, e, f = 
         s |> sscanf "Blueprint %d: Each ore robot costs %d ore. Each clay robot costs %d ore. Each obsidian robot costs %d ore and %d clay. Each geode robot costs %d ore and %d obsidian."
     i,
     [
-        Robot Ore, Cost [Ore, a]
-        Robot Clay, Cost [Ore, b]
-        Robot Obsidian, Cost [Ore, c; Clay, d]
-        Robot Geode, Cost [Ore, e; Obsidian, f]
+        Robot Ore, [Ore, a]
+        Robot Clay, [Ore, b]
+        Robot Obsidian, [Ore, c; Clay, d]
+        Robot Geode, [Ore, e; Obsidian, f]
     ] |> Costs
 
 
@@ -30,83 +26,76 @@ let blueprints =
 
 let search timeLimit (costs: Costs) =
 
-    let resourceAfter time resource (decisions: Decisions) =
-        seq {
-            for Construct(Robot r, t) in decisions do
-                if 0 < t  && t <= time then
-                    - (costs[Robot r] |> Map.tryFind resource |> Option.defaultValue 0)
-                if t < time && r = resource then
-                    time - t
-        } |> sum
+    let maxCostFor =
+        fun res ->
+            costs.Values |> Seq.concat |> filter (fun (k, v) -> k = res) |> Seq.maxBy snd |> snd
+        |> memoizeN
 
-    let canBuild robot decisions time =
-        costs[robot]
-        |> Map.toSeq |> forall (fun (res, ammount) -> 
-            resourceAfter time res decisions >= ammount)
+    let canBuild ((Robot res) as robot) (State (resources, robots)) =
+        (res = Geode || maxCostFor res > robots[robot]) &&
+        costs[robot] |> forall (fun (res, ammount) -> 
+            resources[res] >= ammount)
 
-    let lastTime = function Construct (_ ,t) :: _ -> t | _ -> 0
+    let build (Robot res as robot) (State (resources, robots)) =
+        let robots = robots.Add(robot, robots[robot] + 1 )
+        let rec pay resources = function
+            | (res, price) :: rest -> 
+                rest |> pay (resources |> Map.add res (resources[res] - price))
+            | _ -> resources
+        let resources = pay resources costs[robot]
+        State (resources, robots)
 
-    let score decisions =
-        let scoreRobots robot w =
-            (decisions |> filter (fun (Construct(r, _)) -> r = robot) |> length) * w
-        let scoreResource res w =
-            resourceAfter timeLimit res decisions * w
-        seq {
-            scoreRobots (Robot Ore) 1
-            scoreRobots (Robot Clay) 10
-            scoreRobots (Robot Obsidian) 100
-            scoreRobots (Robot Geode) 1000
-            scoreResource Ore 1
-            scoreResource Clay 10
-            scoreResource Obsidian 100
-            scoreResource Geode 10_000
-        } |> Seq.sum
+    let boundary = [|0..timeLimit + 1|] |> map (fun t -> t * (t - 1) / 2)
+
+    let score t (State (resources, robots)) =
+        let geodeBots = robots[Robot Geode]
+        let geodes = resources[Geode]
+        geodes + geodeBots * t + boundary[t]
 
     let prune =
-        let best = Array.create (timeLimit + 1) 0
-        fun decisions ->
-            let t = lastTime decisions
-            let sc = score decisions
-            if sc > best[t] then
-                best[t] <- sc
-                // printfn $"best score: {sc} at time {t}"
-                // printfn "%A" decisions
-                // printfn ""
-                false
-            else
-                let d = timeLimit - t
-                sc < best[t] - d * 100
+        let mutable best = 0
+        fun t state ->
+            let sc = score t state
+            if sc > best && t = 0 then
+                best <- sc
+            sc < best
 
-    let rec allPaths prune decisions =
-        if prune decisions then Seq.empty else
-        seq {
-            for t in (lastTime decisions) .. timeLimit - 1 do
-                for res in [Ore; Clay; Obsidian; Geode] do
-                    let robot = Robot res
-                    if canBuild robot decisions t then
-                        let next = Construct (robot, t + 1) :: decisions
-                        yield! allPaths prune next
-                        if not (prune next) then
-                            yield next
-        }
+    let allRobots = Set [Robot Geode; Robot Obsidian; Robot Clay; Robot Ore] 
+    
+    let initialState = State (
+            [Ore, 0; Clay, 0; Obsidian, 0 ; Geode, 0] |> Map,
+            allRobots |> map (fun r -> r, 0) |> Map |> Map.add (Robot Ore) 1
+        )
 
-    let initial = [Construct (Robot Ore, 0)]
-    let objective = resourceAfter timeLimit Geode
+    let collected (State (resources, robots)) = 
+        let resources = robots.Keys |> Seq.map (fun (Robot r as k) -> r, robots[k] + resources[r]) |> Map
+        State (resources, robots)
 
-    initial |> allPaths prune |> Seq.map objective |> maximum
+    let rec allPaths t (goal: Robot) (state: State) =
+        if prune t state then Seq.empty
+        else
+            seq {
+                if t = 0 then yield state
+                elif canBuild goal state then
+                    let state' = build goal (collected state)
+                    for robot in allRobots do yield! allPaths (t - 1) robot state'
+                else
+                    yield! allPaths (t - 1) goal (collected state)
+            }
+
+    let objective (State (resources, _))  = resources[Geode]
+
+    seq { for goal in [Robot Clay; Robot Ore] do yield! allPaths timeLimit goal initialState } |> Seq.map objective |> maximum
 
 let partOneProcess (i, costs) =
-    printfn $"processing blueprint {i} ..."
+
     let geodes = search 24 costs
     printfn $" Blueprint {i} done, {geodes} geodes."
     i * geodes
 
-// let partOne = blueprints |> Array.Parallel.map partOneProcess |> sum
+let partOne = blueprints |> Array.Parallel.map partOneProcess |> sum
 
-// let partTwoProcess (_, costs) = search 32 costs
+let partTwoProcess (i, costs) = 
+    search 32 costs |> tap (printfn "Blueprint %d. Found %d geodes." i)
 
-// let partTwo = blueprints[..2] |> Array.Parallel.map partTwoProcess |> sum
-
-let _, b1 = blueprints[0]
-
-search 32 b1
+let partTwo = blueprints[..2] |> Array.Parallel.map partTwoProcess |> Seq.reduce (*)
