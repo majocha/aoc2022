@@ -42,38 +42,34 @@ let distance =
     |> memoizeN
 
 let totalFlow path = path |> Seq.map (fun (valve, openingTime) -> openingTime * getFlow valve) |> sum
-let visited path = path |> List.map fst |> Set 
+let visited path = path |> Seq.map fst |> Set 
 
 let bestValves = valvesToOpen |> toSeq |> sortByDescending getFlow
-
-type Agents = (string * int) list
 
 let start remainingTime n =
 
     let good =
         let mutable best = 0
+        let update score = if score > best then best <- score
 
-        fun agents -> function
-        | (_, time) :: _ as path ->
-            let vs = visited path
-            let remaining = bestValves |> Seq.except vs
-            let ts = 
-                seq { for t in time - 1 .. -2 .. 0 do yield t; yield t }
-            let q = ts |> zip remaining
-            let score = totalFlow path + totalFlow q
-            if (q |> Seq.isEmpty || agents |> length = 0) && score > best then
-                printfn $"best {score} {path}"
-                best <- score
-                true
-            else score > best
-        | _ -> true
-        // |> memoizeN
+        fun path -> function
+            | [] -> totalFlow path |> tap update = best       
+            | agents ->
+                let vs = visited path
+                let remaining = bestValves |> Seq.except vs
+                let ts = 
+                    seq { 
+                        for (_, time) in agents do
+                        for t in 0 .. 2 .. time - 1 do t
+                    } |> sort |> rev
+                let q = ts |> zip remaining
+                totalFlow path + totalFlow q > best
 
-    let rec dfs (agents: Agents) = 
+    let rec dfs agents = 
         function
-        | path when good agents path ->
+        | path when good path agents ->
             let valvesLeft = valvesToOpen - (visited path)
-            match agents with
+            match agents |> sortByDescending snd with
             | [] -> seq { path }
             | (goal, t) :: rest -> 
                 let steps =
@@ -84,12 +80,11 @@ let start remainingTime n =
                             if time > 0 then next, time
                     }
                 if steps |> Seq.isEmpty then dfs rest path
-                else steps |> Seq.collect (fun next -> dfs (next :: rest |> sortByDescending snd) (next :: path))
+                else steps |> Seq.collect (fun next -> dfs (next :: rest) (next :: path))
         | _ -> Seq.empty
-        // |> memoizeN
 
     dfs [for i in 1..n do ("AA", remainingTime);] [] |> Seq.maxBy totalFlow
 
 let partOne = start 30 1 |> totalFlow
-let partTwo = start 26 2 |> totalFlow
 
+let partTwo = start 26 2 |> totalFlow
