@@ -13,11 +13,11 @@ let valves = System.IO.File.ReadAllLines "16.txt" |> map parseLine
 let valvesToOpen = valves |> filter (fun v -> v.Flow > 0) |> map (fun v -> v.Name) |> Set
 
 let getFlow =
-    let vs = [for v in valves -> v.Name, v.Flow] |> Map
+    let vs = [ for v in valves -> v.Name, v.Flow ] |> Map
     fun n -> vs[n]
 
 let getConnections =
-    let vs = [for v in valves -> v.Name, v.Connections] |> Map
+    let vs = [ for v in valves -> v.Name, v.Connections ] |> Map
     fun n -> vs[n] |> sortByDescending getFlow
     |> memoizeN
 
@@ -55,18 +55,15 @@ let start remainingTime n =
         fun path -> function
             | [] -> totalFlow path |> tap update = best       
             | agents ->
-                let vs = visited path
-                let remaining = bestValves |> Seq.except vs
-                let ts = 
+                let remaining = bestValves |> Seq.except (visited path)
+                let q = 
                     seq { 
                         for (_, time) in agents do
                         for t in 0 .. 2 .. time - 1 do t
-                    } |> sort |> rev
-                let q = ts |> zip remaining
+                    } |> sort |> rev |> zip remaining
                 totalFlow path + totalFlow q > best
 
-    let rec dfs agents = 
-        function
+    let rec dfs agents = function
         | path when good path agents ->
             let valvesLeft = valvesToOpen - (visited path)
             match agents |> sortByDescending snd with
@@ -83,7 +80,7 @@ let start remainingTime n =
                 else steps |> Seq.collect (fun next -> dfs (next :: rest) (next :: path))
         | _ -> Seq.empty
 
-    dfs [for i in 1..n do ("AA", remainingTime);] [] |> Seq.maxBy totalFlow
+    dfs [ for i in 1..n do ("AA", remainingTime) ] [] |> Seq.maxBy totalFlow
 
 let partOne = start 30 1 |> totalFlow
 
