@@ -18,80 +18,78 @@ let getFlow =
 
 let getConnections =
     let vs = [for v in valves -> v.Name, v.Connections] |> Map
-    fun n -> vs[n]
-
-let totalFlow path = path |> map (fun (valve, openingTime) -> openingTime * getFlow valve) |> sum
-
-let rec bestPath1 =
-    fun start valvesToOpen time ->
-        if time = 0 || valvesToOpen |> Set.isEmpty then []
-        else
-            seq {
-
-                if valvesToOpen |> Set.contains start then
-                        yield (start, time) :: bestPath1 start (valvesToOpen |> Set.remove start) (time - 1)
-
-                for v in getConnections start do
-                        yield bestPath1 v valvesToOpen (time - 1)
-
-            } |> Seq.maxBy totalFlow 
+    fun n -> vs[n] |> sortByDescending getFlow
     |> memoizeN
 
-let partOne = bestPath1 "AA" valvesToOpen 29 |> totalFlow
+let rec dijkstra dist = function
+    | [] -> dist
+    | toVisit ->
+        let dist = dist |> Map.union (Map toVisit)
+        [
+            for n, d in toVisit do
+                for c in getConnections n do
+                    match dist |> Map.tryFind c with
+                    | Some d1 when d + 1 < d1 ->
+                        yield c, d + 1
+                    | None -> yield c, d + 1
+                    | _ -> ()
+        ] |> dijkstra dist
 
-
-// let rec bestPath =
-//     fun p1 p2 valvesToOpen time ->
-//         if time = 0 || valvesToOpen |> Set.isEmpty then []
-//         else
-//             seq {
-
-//                 let both = Set [p1; p2]
-//                 if p1 <> p2 && both.IsSubsetOf(valvesToOpen) then
-//                     yield (p2, time) :: (p1, time) :: bestPath p1 p2 (valvesToOpen - both) (time - 1)
-
-//                 if valvesToOpen |> Set.contains p2 then
-//                     for v1 in getConnections p1 do
-//                         yield (p2, time) :: bestPath v1 p2 (valvesToOpen |> Set.remove p2) (time - 1)
-
-//                 if valvesToOpen |> Set.contains p1 then
-//                     for v2 in getConnections p2 do
-//                         yield (p1, time) :: bestPath p1 v2 (valvesToOpen |> Set.remove p1) (time - 1)
-
-//                 for v1 in getConnections p1 do
-//                     for v2 in getConnections p2 do
-//                         yield bestPath v1 v2 valvesToOpen (time - 1)
-
-//             } |> Seq.filter (fun p -> totalFlow p < 1790) |> Seq.maxBy totalFlow 
-//     |> memoizeN
-
-
-// let partTwo = bestPath "AA" "AA" valvesToOpen 25 |> totalFlow
-
-let rec bestPath =
-    fun p1 p2 valvesToOpen time ->
-        if time = 0 || valvesToOpen |> Set.isEmpty then []
-        else
-            seq {
-
-                let both = Set [p1; p2]
-                if p1 <> p2 && both.IsSubsetOf(valvesToOpen) then
-                    yield (p2, time) :: (p1, time) :: bestPath p1 p2 (valvesToOpen - both) (time - 1)
-
-                if valvesToOpen |> Set.contains p2 then
-                    for v1 in getConnections p1 do
-                        yield (p2, time) :: bestPath v1 p2 (valvesToOpen |> Set.remove p2) (time - 1)
-
-                if valvesToOpen |> Set.contains p1 then
-                    for v2 in getConnections p2 do
-                        yield (p1, time) :: bestPath p1 v2 (valvesToOpen |> Set.remove p1) (time - 1)
-
-                for v1 in getConnections p1 do
-                    for v2 in getConnections p2 do
-                        yield bestPath v1 v2 valvesToOpen (time - 1)
-
-            } |> Seq.filter (fun p -> totalFlow p < 1790) |> Seq.maxBy totalFlow 
+let distance =
+    fun v1 ->
+        let distances = dijkstra Map.empty [v1, 0]
+        fun v2 -> distances[v2]
     |> memoizeN
 
+let totalFlow path = path |> Seq.map (fun (valve, openingTime) -> openingTime * getFlow valve) |> sum
+let visited path = path |> List.map fst |> Set 
 
-let partTwo = bestPath "AA" "AA" valvesToOpen 25 //|> totalFlow
+let bestValves = valvesToOpen |> toSeq |> sortByDescending getFlow
+
+type Agents = (string * int) list
+
+let start remainingTime n =
+
+    let good =
+        let mutable best = 0
+
+        fun agents -> function
+        | (_, time) :: _ as path ->
+            let vs = visited path
+            let remaining = bestValves |> Seq.except vs
+            let ts = 
+                seq { for t in time - 1 .. -2 .. 0 do yield t; yield t }
+            let q = ts |> zip remaining
+            let score = totalFlow path + totalFlow q
+            if (q |> Seq.isEmpty || agents |> length = 0) && score > best then
+                printfn $"best {score} {path}"
+                best <- score
+                true
+            else score > best
+        | _ -> true
+        // |> memoizeN
+
+    let rec dfs (agents: Agents) = 
+        function
+        | path when good agents path ->
+            let valvesLeft = valvesToOpen - (visited path)
+            match agents with
+            | [] -> seq { path }
+            | (goal, t) :: rest -> 
+                let steps =
+                    seq {
+                        if t = 0 then goal, t else
+                        for next in valvesLeft |> sortByDescending (distance goal) do
+                            let time = t - distance goal next - 1
+                            if time > 0 then next, time
+                    }
+                if steps |> Seq.isEmpty then dfs rest path
+                else steps |> Seq.collect (fun next -> dfs (next :: rest |> sortByDescending snd) (next :: path))
+        | _ -> Seq.empty
+        // |> memoizeN
+
+    dfs [for i in 1..n do ("AA", remainingTime);] [] |> Seq.maxBy totalFlow
+
+let partOne = start 30 1 |> totalFlow
+let partTwo = start 26 2 |> totalFlow
+
